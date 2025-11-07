@@ -4,6 +4,7 @@
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/time.h>
 
 #include "readData.c"
 #include "utils.c"
@@ -56,6 +57,11 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
+    struct timeval startTime, endTime;
+    struct timezone tz;
+
+    gettimeofday(&startTime, &tz);
+
     struct COO matrix;
     initStruct(&matrix, argv[1]);
 
@@ -65,11 +71,11 @@ int main(int argc, char* argv[]) {
     int* rank = calloc(matrix.numberOfRows, sizeof(int));
     connectedComponents(matrix, parent, rank);
 
-    // for (int i = 0; i < matrix.numberOfRows; i++) {
-    //     printf("[%d]\t%d\n", i, parent[i]);
-    // }
-
     printSolution(parent, matrix.numberOfRows);
+    gettimeofday(&endTime, &tz);
+
+    double elapsedTime = (endTime.tv_usec - startTime.tv_usec)*1e-6;
+    printf("Execution time: %fs\n", elapsedTime);
 
     return 0;
 }

@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-// #include "readData.c"
+int root(int vertex, int* parent);
 
 struct coordinates {
     int row;
@@ -26,6 +26,7 @@ void printMatrix(struct COO matrix) {
 struct coordinates getNElement(struct COO matrix, int n) {
     struct coordinates retVal;
 
+    // TODO implement binary search
     for (int i = 0; i < matrix.numberOfRows; i++) {
         if (matrix.rowPointer[i] > n) {
             retVal.row = i;
@@ -51,8 +52,9 @@ void printSolution(int* parent, int lenght) {
     int numberOfUniqueParents = 0;
 
     for (int i = 0; i < lenght; i++) {
-        if (!contains(uniqueParents, numberOfUniqueParents, parent[i])) {
-            uniqueParents[numberOfUniqueParents] = parent[i];
+        int vertexRoot = root(i, parent);
+        if (!contains(uniqueParents, numberOfUniqueParents, vertexRoot)) {
+            uniqueParents[numberOfUniqueParents] = vertexRoot;
             numberOfUniqueParents += 1;
         }
     }
@@ -60,7 +62,7 @@ void printSolution(int* parent, int lenght) {
     printf("Number of connected components: %d\n", numberOfUniqueParents);
 }
 
-void swap(int* a, int* b){
+void swap(int* a, int* b) {
     int tmp = *a;
     *a = *b;
     *b = tmp;

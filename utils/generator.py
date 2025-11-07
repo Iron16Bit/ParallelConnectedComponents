@@ -1,7 +1,7 @@
 import os
 import random
 import concurrent.futures
-from typing import List, Tuple, Set
+from typing import Tuple, Set
 
 BASE_PATH = f"{os.path.dirname(os.path.realpath(__file__))}/.."
 
