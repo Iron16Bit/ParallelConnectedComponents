@@ -1,6 +1,6 @@
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 
 // #include "readData.c"
 
@@ -26,20 +26,19 @@ void printMatrix(struct COO matrix) {
 struct coordinates getNElement(struct COO matrix, int n) {
     struct coordinates retVal;
 
-    for (int i=0; i<matrix.numberOfRows; i++) {
-        if (matrix.rowPointer[i] >= n) {
+    for (int i = 0; i < matrix.numberOfRows; i++) {
+        if (matrix.rowPointer[i] > n) {
             retVal.row = i;
             break;
         }
     }
 
     retVal.col = matrix.cols[n];
-
     return retVal;
 }
 
 bool contains(int* parent, int length, int n) {
-    for (int i = 0; i<length; i++) {
+    for (int i = 0; i < length; i++) {
         if (parent[i] == n) {
             return true;
         }
@@ -47,16 +46,22 @@ bool contains(int* parent, int length, int n) {
     return false;
 }
 
-void printSolution(int* parent, int numberOfValues) {
-    int* uniqueParents =(int*)malloc(sizeof(int)*numberOfValues);
+void printSolution(int* parent, int lenght) {
+    int* uniqueParents = (int*)malloc(sizeof(int) * lenght);
     int numberOfUniqueParents = 0;
 
-    for (int i=0; i<numberOfValues; i++) {
+    for (int i = 0; i < lenght; i++) {
         if (!contains(uniqueParents, numberOfUniqueParents, parent[i])) {
             uniqueParents[numberOfUniqueParents] = parent[i];
-            numberOfUniqueParents+=1;
+            numberOfUniqueParents += 1;
         }
     }
 
     printf("Number of connected components: %d\n", numberOfUniqueParents);
+}
+
+void swap(int* a, int* b){
+    int tmp = *a;
+    *a = *b;
+    *b = tmp;
 }

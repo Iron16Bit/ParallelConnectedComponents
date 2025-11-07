@@ -22,6 +22,9 @@ int initStruct(struct COO* matrix /* out */,
         exit(1);
     }
 
+    // ignore first line
+    getline(&line, &len, fp);
+
     // Reading first line to get matrix shape
     getline(&line, &len, fp);
     if (sscanf(line, "%d %d %d", &rows, &cols, &values) != 3) {

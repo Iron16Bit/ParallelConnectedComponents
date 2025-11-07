@@ -2,3 +2,4 @@ venv/
 *.mtx
 *.out
 out/
+*.txt
