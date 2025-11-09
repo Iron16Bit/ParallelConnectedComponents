@@ -16,7 +16,7 @@ Neighbors[1] = { 0, 2 }       Degree[1] = 2
 Neighbors[2] = { 1 }          Degree[2] = 1
 
 Resulting struct Graph will have:
-neighbors = [ 1, 0, 2, 1 ]
+neighbors = [ {1}, {0, 2}, {1} ]
 degree = [ 1, 2, 1 ]
 numberOfNodes = 3
 numberOfEdges = 4
