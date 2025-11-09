@@ -1,71 +1,165 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-struct COO {
-    int* rowPointer;
-    int* cols;
-    int numberOfRows;
-    int numberOfValues;
-    int numberOfCols;
+struct Graph
+{
+    int **neighbors;   // Neighbors[u]: an array of neighbor ids
+    int *degree;       // Degree[u]: number of neighbors for node u
+    int numberOfNodes; // Number of nodes
+    int numberOfEdges; // Number of edge entries (lines) in the file
 };
 
-int initStruct(struct COO* matrix /* out */,
-               char* pathToFile /* in */) {
-    FILE* fp;
-    char* line = NULL;
+/*
+Ex: A graph 0 <-> 1 <-> 2 is represented as:
+Neighbors[0] = { 1 }          Degree[0] = 1
+Neighbors[1] = { 0, 2 }       Degree[1] = 2
+Neighbors[2] = { 1 }          Degree[2] = 1
+
+Resulting struct Graph will have:
+neighbors = [ 1, 0, 2, 1 ]
+degree = [ 1, 2, 1 ]
+numberOfNodes = 3
+numberOfEdges = 4
+*/
+
+int initStruct(struct Graph *graph /* out */,
+               char *pathToFile /* in */)
+{
+    FILE *fp;
+    char *line = NULL;
     size_t len = 0;
     int rows, cols, values;
 
     fp = fopen(pathToFile, "r");
-    if (fp == NULL) {
+    if (fp == NULL)
+    {
         fprintf(stderr, "Error File: %s is not found\n", pathToFile);
         exit(1);
     }
 
-    // ignore first line
+    // Ignore comment on first line
     getline(&line, &len, fp);
 
-    // Reading first line to get matrix shape
     getline(&line, &len, fp);
-    if (sscanf(line, "%d %d %d", &rows, &cols, &values) != 3) {
+    if (sscanf(line, "%d %d %d", &rows, &cols, &values) != 3)
+    {
         fprintf(stderr, "Error: Failed to parse matrix dimensions\n");
         fclose(fp);
         return 1;
     }
 
-    // Data Init
-    // struct COO matrix;
-    int* rowPointerArray = (int*)calloc(rows, sizeof(int));
-    int* colsArray = (int*)calloc(values, sizeof(int));
-    (*matrix).cols = (int*)colsArray;
-    (*matrix).rowPointer = (int*)rowPointerArray;
-    (*matrix).numberOfRows = rows;
-    (*matrix).numberOfCols = cols;
-    (*matrix).numberOfValues = values;
-
-    int lastRow = 0;
-    int row = 0;
-    for (int i = 0; i < values; i++) {
-        getline(&line, &len, fp);
-        sscanf(line, "%d %d", &row, &cols);
-
-        // rowPointer
-        if (lastRow == row) {
-            (*matrix).rowPointer[row] += 1;
-        } else {
-            for (int j = lastRow + 1; j <= row; j++) {
-                (*matrix).rowPointer[j] = (*matrix).rowPointer[lastRow];
-            }
-            (*matrix).rowPointer[row] += 1;
-        }
-
-        // cols
-        (*matrix).cols[i] = cols;
-
-        // next
-        lastRow = row;
+    int *degree = (int *)calloc(rows, sizeof(int));
+    int **neighbors = (int **)malloc(sizeof(int *) * rows);
+    for (int i = 0; i < rows; i++)
+    {
+        neighbors[i] = NULL;
     }
 
+    // Buffer for the current row
+    int current_row = -1;
+    int *buf = NULL;
+    int buf_cap = 0;
+    int buf_len = 0;
+    long totalEntries = 0;
+
+    while (getline(&line, &len, fp) != -1)
+    {
+        int r = 0, c = 0;
+        if (sscanf(line, "%d %d", &r, &c) < 2)
+        {
+            fprintf(stderr, "Error: Failed to parse matrix dimensions\n");
+            fclose(fp);
+            return 1;
+        }
+
+        if (r != current_row)
+        {
+            // Finalize previous row
+            if (current_row != -1)
+            {
+                if (buf_len > 0)
+                {
+                    neighbors[current_row] = (int *)malloc(sizeof(int) * buf_len);
+                    for (int i = 0; i < buf_len; i++)
+                        neighbors[current_row][i] = buf[i];
+                    degree[current_row] = buf_len;
+                    totalEntries += buf_len;
+                }
+                else
+                {
+                    neighbors[current_row] = NULL;
+                    degree[current_row] = 0;
+                }
+
+                // Handle any skipped empty rows between current_row and r
+                for (int rr = current_row + 1; rr < r; rr++)
+                {
+                    neighbors[rr] = NULL;
+                    degree[rr] = 0;
+                }
+
+                buf_len = 0;
+            }
+
+            current_row = r;
+        }
+
+        // Instead of having a fixed-size buffer of number of nodes, we can dynamically resize as needed
+        // Much more efficient for sparse graphs wiht a high number of nodes
+        if (buf_len + 1 > buf_cap)
+        {
+            int new_cap = buf_cap == 0 ? 4 : buf_cap * 2;
+            int *new_buf = (int *)realloc(buf, sizeof(int) * new_cap);
+            if (!new_buf)
+            {
+                fprintf(stderr, "Memory allocation failed\n");
+                free(buf);
+                for (int i = 0; i < rows; i++)
+                    free(neighbors[i]);
+                free(neighbors);
+                free(degree);
+                fclose(fp);
+                if (line)
+                    free(line);
+                return 1;
+            }
+            buf = new_buf;
+            buf_cap = new_cap;
+        }
+        buf[buf_len++] = c;
+    }
+
+    // Finalize last seen row
+    if (current_row != -1)
+    {
+        if (buf_len > 0)
+        {
+            neighbors[current_row] = (int *)malloc(sizeof(int) * buf_len);
+            for (int i = 0; i < buf_len; i++)
+                neighbors[current_row][i] = buf[i];
+            degree[current_row] = buf_len;
+            totalEntries += buf_len;
+        }
+        else
+        {
+            neighbors[current_row] = NULL;
+            degree[current_row] = 0;
+        }
+
+        // Fill any remaining rows after last seen row with empty lists
+        for (int rr = current_row + 1; rr < rows; rr++)
+        {
+            neighbors[rr] = NULL;
+            degree[rr] = 0;
+        }
+    }
+
+    graph->neighbors = neighbors;
+    graph->degree = degree;
+    graph->numberOfNodes = rows;
+    graph->numberOfEdges = (int)totalEntries;
+
+    free(buf);
     fclose(fp);
     if (line)
         free(line);

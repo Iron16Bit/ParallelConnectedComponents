@@ -9,22 +9,25 @@
 #include "readData.c"
 #include "utils.c"
 
-int* initParent(struct COO matrix) {
-    int length = matrix.numberOfRows;
-    int* parent = malloc(sizeof(int) * length);
+int *initParent(struct Graph graph)
+{
+    int length = graph.numberOfNodes;
+    int *parent = malloc(sizeof(int) * length);
 
-    // Initialize each parent as the nodeitself
-    for (int i = 0; i < length; i++) {
-        // struct coordinates edge = getNElement(matrix, i);
+    // Initialize each parent as the node itself
+    for (int i = 0; i < length; i++)
+    {
         parent[i] = i;
     }
 
     return parent;
 }
 
-int root(int vertex, int* parent) {
+int root(int vertex, int *parent)
+{
     // Find the topmost parent of vertex
-    if (vertex == parent[vertex]) {
+    if (vertex == parent[vertex])
+    {
         return vertex;
     }
 
@@ -32,27 +35,39 @@ int root(int vertex, int* parent) {
     return parent[vertex];
 }
 
-void connectedComponents(struct COO matrix, int* parent, int* rank) {
-    // Connect nodes with shared edges
-    for (int i = 0; i < matrix.numberOfValues; i++) {
-        struct coordinates edge = getNElement(matrix, i);
-        int vertexA = root(edge.row, parent);
-        int vertexB = root(edge.col, parent);
+void connectedComponents(struct Graph graph, int *parent, int *rank)
+{
+    // Connect nodes using adjacency lists
+    for (int u = 0; u < graph.numberOfNodes; u++)
+    {
+        for (int k = 0; k < graph.degree[u]; k++)
+        {
+            int v = graph.neighbors[u][k];
+            if (u == v)
+                continue; // skip edges to self
+            int vertexA = root(u, parent);
+            int vertexB = root(v, parent);
 
-        if (vertexA != vertexB) {
-            if (rank[vertexA] < rank[vertexB]) {
-                swap(&vertexA, &vertexB);
-            }
-            parent[vertexB] = vertexA;
-            if (rank[vertexA] == rank[vertexB]) {
-                rank[vertexA] += 1;
+            if (vertexA != vertexB)
+            {
+                if (rank[vertexA] < rank[vertexB])
+                {
+                    swap(&vertexA, &vertexB);
+                }
+                parent[vertexB] = vertexA;
+                if (rank[vertexA] == rank[vertexB])
+                {
+                    rank[vertexA] += 1;
+                }
             }
         }
     }
 }
 
-int main(int argc, char* argv[]) {
-    if (argc != 2) {
+int main(int argc, char *argv[])
+{
+    if (argc != 2)
+    {
         fprintf(stderr, "Error Usage: ./a.out <path_to_file>\n");
         exit(1);
     }
@@ -62,20 +77,20 @@ int main(int argc, char* argv[]) {
 
     gettimeofday(&startTime, &tz);
 
-    struct COO matrix;
-    initStruct(&matrix, argv[1]);
+    struct Graph graph;
+    initStruct(&graph, argv[1]);
 
-    // printMatrix(matrix);
+    // printGraph(graph);
 
-    int* parent = initParent(matrix);
-    int* rank = calloc(matrix.numberOfRows, sizeof(int));
-    connectedComponents(matrix, parent, rank);
+    int *parent = initParent(graph);
+    int *rank = calloc(graph.numberOfNodes, sizeof(int));
+    connectedComponents(graph, parent, rank);
 
-    printSolution(parent, matrix.numberOfRows);
+    printSolution(parent, graph.numberOfNodes);
     gettimeofday(&endTime, &tz);
 
-    double elapsedTime = (endTime.tv_usec - startTime.tv_usec)*1e-6;
-    printf("Execution time: %fs\n", elapsedTime);
+    long unsigned int elapsedTime = (endTime.tv_sec - startTime.tv_sec);
+    printf("Execution time: %lus\n", elapsedTime);
 
     return 0;
 }
