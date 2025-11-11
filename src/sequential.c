@@ -9,88 +9,82 @@
 #include "readData.c"
 #include "utils.c"
 
-int *initParent(struct Graph graph)
-{
+int* initParent(struct Graph graph) {
     int length = graph.numberOfNodes;
-    int *parent = malloc(sizeof(int) * length);
+    int* parent = malloc(sizeof(int) * length);
 
     // Initialize each parent as the node itself
-    for (int i = 0; i < length; i++)
-    {
+    for (int i = 0; i < length; i++) {
         parent[i] = i;
     }
 
     return parent;
 }
 
-int root(int vertex, int *parent)
-{
-    // Find the topmost parent of vertex
-    if (vertex == parent[vertex])
-    {
-        return vertex;
-    }
 
-    parent[vertex] = root(parent[vertex], parent);
-    return parent[vertex];
-}
 
-void connectedComponents(struct Graph graph, int *parent, int *rank)
-{
-    // Connect nodes using adjacency lists
-    for (int u = 0; u < graph.numberOfNodes; u++)
-    {
-        for (int k = 0; k < graph.degree[u]; k++)
-        {
-            int v = graph.neighbors[u][k];
-            if (u == v)
-                continue; // skip edges to self
-            int vertexA = root(u, parent);
-            int vertexB = root(v, parent);
-
-            if (vertexA != vertexB)
-            {
-                if (rank[vertexA] < rank[vertexB])
-                {
-                    swap(&vertexA, &vertexB);
-                }
-                parent[vertexB] = vertexA;
-                if (rank[vertexA] == rank[vertexB])
-                {
-                    rank[vertexA] += 1;
-                }
+// Rem's algorithm
+void findCommonAncestor(int x, int y, int* parent) {
+    int rootX = x, rootY = y;
+    int tmp;
+    while (parent[rootX] != parent[rootY]) {
+        if (parent[rootX] < parent[rootY]) {
+            if (rootX == parent[rootX]) {
+                parent[rootX] = parent[rootY];
+                break;
             }
+            tmp = parent[rootX];
+            parent[rootX] = parent[rootY];
+            rootX = tmp;
+        } else {
+            if (rootY == parent[rootY]) {
+                parent[rootY] = parent[rootX];
+                break;
+            }
+            tmp = parent[rootY];
+            parent[rootY] = parent[rootX];
+            rootY = tmp;
         }
     }
 }
 
-int main(int argc, char *argv[])
-{
-    if (argc != 2)
-    {
+void connectedComponents(struct Graph graph, int* parent) {
+    // Connect nodes using adjacency lists
+    for (int u = 0; u < graph.numberOfNodes; u++) {
+        for (int k = 0; k < graph.degree[u]; k++) {
+            int v = graph.neighbors[u][k];
+            if (u == v)
+                continue;  // skip edges to self
+            findCommonAncestor(u, v, parent);
+        }
+    }
+}
+
+int main(int argc, char* argv[]) {
+    if (argc != 2) {
         fprintf(stderr, "Error Usage: ./a.out <path_to_file>\n");
         exit(1);
     }
 
     struct timeval startTime, endTime;
-    struct timezone tz;
 
-    gettimeofday(&startTime, &tz);
+    gettimeofday(&startTime, 0);
 
     struct Graph graph;
     initStruct(&graph, argv[1]);
 
     // printGraph(graph);
 
-    int *parent = initParent(graph);
-    int *rank = calloc(graph.numberOfNodes, sizeof(int));
-    connectedComponents(graph, parent, rank);
+    int* parent = initParent(graph);
+    connectedComponents(graph, parent);
 
     printSolution(parent, graph.numberOfNodes);
-    gettimeofday(&endTime, &tz);
+    gettimeofday(&endTime, 0);
 
-    long unsigned int elapsedTime = (endTime.tv_sec - startTime.tv_sec);
-    printf("Execution time: %lus\n", elapsedTime);
+    long executionSeconds = endTime.tv_sec - startTime.tv_sec;
+    long executionMicroseconds = endTime.tv_usec - startTime.tv_usec;
+    double elapsedTime = executionSeconds + executionMicroseconds * 1e-6;
+    printf("Execution time: %.6fs\n", elapsedTime);
 
     return 0;
 }
