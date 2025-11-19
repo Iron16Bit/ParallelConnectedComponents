@@ -19,6 +19,7 @@ SRC_DEBUG = src/parallelSV.c
 
 .PHONY: all clean dirs
 
+parallel: dirs $(TARGET_PSV)
 all: dirs $(TARGET_SEQ_REM) $(TARGET_SEQ_SV) $(TARGET_PSV) $(TARGET_GEN) $(TARGET_DEBUG)
 
 dirs:

@@ -6,11 +6,14 @@ int root(int vertex, int* parent);
 
 void printGraph(struct Graph graph) {
     printf("Adjacency lists:\n");
+    int elementPrinted = 0;
+
     for (int i = 0; i < graph.numberOfNodes; i++) {
-        printf("%d: ", i);
-        for (int j = 0; j < graph.degree[i]; j++) {
-            printf("%d, ", graph.neighbors[i][j]);
+        printf("[%d]\t", i);
+        for (int j = elementPrinted; j < elementPrinted + graph.degree[i]; j++) {
+            printf("%d\t", graph.neighbors[j]);
         }
+        elementPrinted += graph.degree[i];
         printf("\n");
     }
 }
