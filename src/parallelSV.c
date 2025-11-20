@@ -15,121 +15,116 @@ struct SubGraph {
     int numberOfNodes;
     int numberOfEdges;
     int* degree;
-    int** neighbor;
+    int** neighbors;
     int offset;
 };
 
-// int* initParent(struct Graph graph) {
-//     int length = graph.numberOfNodes;
-//     int* parent = malloc(sizeof(int) * length);
+int* initParent(int length) {
+    int* parent = malloc(sizeof(int) * length);
 
-//     // Initialize each parent as the node itself
-//     for (int i = 0; i < length; i++) {
-//         parent[i] = i;
-//     }
+    // Initialize each parent as the node itself
+    for (int i = 0; i < length; i++) {
+        parent[i] = i;
+    }
 
-//     return parent;
-// }
+    return parent;
+}
 
-// void findMinGrandparentOfNeighbours(struct Graph g, const int* gp, int* mngp, int start, int end) {
-//     for (int u = start; u < end; u++) {
-//         int min_val = gp[u];
-//         for (int k = 0; k < g.degree[u]; k++) {
-//             int v = g.neighbors[u][k];
-//             if (gp[v] < min_val)
-//                 min_val = gp[v];
-//         }
-//         mngp[u] = min_val;
-//     }
-// }
+void findMinGrandparentOfNeighbours(struct SubGraph g, const int* gp, int* mngp) {
+    for (int u = 0; u < g.numberOfNodes; u++) {
+        int min_val = gp[g.offset + u];
+        for (int k = 0; k < g.degree[u]; k++) {
+            int v = g.neighbors[u][k];
+            if (gp[v] < min_val)
+                min_val = gp[v];
+        }
+        mngp[g.offset + u] = min_val;
+    }
+}
 
-// void vectorMin(int* dst, const int* src, int start, int end) {
-//     for (int i = start; i < end; i++)
-//         if (src[i] < dst[i])
-//             dst[i] = src[i];
-// }
+void vectorMin(int* dst, const int* src, int n, int offset) {
+    for (int i = offset; i < offset + n; i++)
+        if (src[i] < dst[i])
+            dst[i] = src[i];
+}
 
-// void computeGrandparent(const int* f, int* gp, int start, int end) {
-//     for (int i = start; i < end; i++)
-//         gp[i] = f[f[i]];
-// }
+void computeGrandparent(const int* f, int* gp, int n, int offset) {
+    for (int i = offset; i < offset + n; i++)
+        gp[i] = f[f[i]];
+}
 
-// void minGrandparent(int* f, const int* mngp, int start, int end) {
-//     for (int u = start; u < end; u++) {
-//         int idx = f[u];
-//         if (mngp[u] < f[idx])
-//             f[idx] = mngp[u];
-//     }
-// }
+void minGrandparent(int* f, const int* mngp, int n, int offset) {
+    for (int u = offset; u < offset + n; u++) {
+        int idx = f[u];
+        if (mngp[u] < f[idx])
+            f[idx] = mngp[u];
+    }
+}
 
-// bool converged(const int* gp, const int* dup, int start, int end) {
-//     for (int i = start; i < end; i++)
-//         if (gp[i] != dup[i])
-//             return false;
-//     return true;
-// }
+bool converged(const int* gp, const int* dup, int n, int offset) {
+    for (int i = offset; i < offset + n; i++)
+        if (gp[i] != dup[i])
+            return false;
+    return true;
+}
 
-// void update(int* dest, int* src, int start, int end) {
-//     for (int i = start; i < end; i++)
+// void update(int* dest, int* src, int n) {
+//     for (int i = 0; i < n; i++)
 //         dest[i] = src[i];
 // }
 
-// void connectedComponents(struct Graph graph, int* f, int rank, int* displacement, int* recvCounts) {
-//     int n = graph.numberOfNodes;
-//     int* gp = malloc(sizeof(int) * n);
-//     int* dup = malloc(sizeof(int) * n);
-//     int* mngp = malloc(sizeof(int) * n);
+void connectedComponents(struct SubGraph graph, int* f, int rank, int* displacement, int* recvCounts, int totalNodes) {
+    int n = graph.numberOfNodes;
+    int* gp = malloc(sizeof(int) * totalNodes);
+    int* dup = malloc(sizeof(int) * totalNodes);
+    int* mngp = malloc(sizeof(int) * totalNodes);
 
-//     int start = displacement[rank];
-//     int end = start + recvCounts[rank];
+    // Initialization
+    for (int i = 0; i < totalNodes; i++) {
+        gp[i] = f[i];
+        dup[i] = gp[i];
+        mngp[i] = gp[i];
+    }
 
-//     // Initialization
-//     for (int i = 0; i < n; i++) {
-//         gp[i] = f[i];
-//         dup[i] = gp[i];
-//         mngp[i] = gp[i];
-//     }
+    bool stop = false;
+    bool local_stop = false;
+    while (!stop) {
+        // 1a. mngp = A ⊗ gp  (neighbor-wise minimum grandparent)
+        findMinGrandparentOfNeighbours(graph, gp, mngp);  // GrB mxv
 
-//     bool stop = false;
-//     bool local_stop = false;
-//     while (!stop) {
-//         // 1a. mngp = A ⊗ gp  (neighbor-wise minimum grandparent)
-//         findMinGrandparentOfNeighbours(graph, gp, mngp, start, end);  // GrB mxv
+        // 1b. Stochastic hooking: f[f[u]] = min(f[f[u]], mngp[u])
+        minGrandparent(f, mngp, n, graph.offset);  // GrB assign
 
-//         // 1b. Stochastic hooking: f[f[u]] = min(f[f[u]], mngp[u])
-//         minGrandparent(f, mngp, start, end);  // GrB assign
+        // 2. Aggressive hooking: f[u] = min(f[u], mngp[u])
+        vectorMin(f, mngp, n, graph.offset);  // GrB eWiseMult
 
-//         // 2. Aggressive hooking: f[u] = min(f[u], mngp[u])
-//         vectorMin(f, mngp, start, end);  // GrB eWiseMult
+        // 3. Shortcutting: f[u] = min(f[u], gp[u])
+        vectorMin(f, gp, n, graph.offset);  // GrB eWiseMult
 
-//         // 3. Shortcutting: f[u] = min(f[u], gp[u])
-//         vectorMin(f, gp, start, end);  // GrB eWiseMult
+        // 4. Compute grandparent: gp[u] = f[f[u]]
+        computeGrandparent(f, gp, n, graph.offset);
 
-//         // 4. Compute grandparent: gp[u] = f[f[u]]
-//         computeGrandparent(f, gp, start, end);
+        // 5a. Check convergence
+        local_stop = converged(gp, dup, n, graph.offset);
 
-//         // 5a. Check convergence
-//         local_stop = converged(gp, dup, start, end);
+        int local_stop_int = local_stop ? 1 : 0;
+        int stop_int = 0;
 
-//         // 5b. Update dup = gp
-//         update(dup, gp, start, end);  // GrB assign
+        MPI_Allreduce(MPI_IN_PLACE, f, totalNodes, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+        MPI_Allreduce(&local_stop_int, &stop_int, 1, MPI_INT, MPI_LAND, MPI_COMM_WORLD);
+        stop = (stop_int != 0);
 
-//         int local_stop_int = local_stop ? 1 : 0;
-//         int stop_int = 0;
+        for (int i = 0; i < totalNodes; i++) {
+            gp[i] = f[f[i]];
+            dup[i] = gp[i];
+            mngp[i] = gp[i];
+        }
+    }
 
-//         MPI_Allgatherv(f + start, recvCounts[rank], MPI_INT, f, recvCounts, displacement, MPI_INT, MPI_COMM_WORLD);
-//         MPI_Allgatherv(gp + start, recvCounts[rank], MPI_INT, gp, recvCounts, displacement, MPI_INT, MPI_COMM_WORLD);
-//         MPI_Allgatherv(dup + start, recvCounts[rank], MPI_INT, dup, recvCounts, displacement, MPI_INT, MPI_COMM_WORLD);
-//         MPI_Allgatherv(mngp + start, recvCounts[rank], MPI_INT, mngp, recvCounts, displacement, MPI_INT, MPI_COMM_WORLD);
-
-//         MPI_Allreduce(&local_stop_int, &stop_int, 1, MPI_INT, MPI_LAND, MPI_COMM_WORLD);
-//         stop = (stop_int != 0);
-//     }
-
-//     free(gp);
-//     free(dup);
-//     free(mngp);
-// }
+    free(gp);
+    free(dup);
+    free(mngp);
+}
 
 void split(struct Graph graph, int size, int* sendCountsNode, int* sendCountsDegree) {
     int idealValuesPerProcess = (graph.numberOfEdges + size - 1) / size;
@@ -170,28 +165,27 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
-    struct Graph graph;
     struct timeval startTime, endTime;
     int rank, size;
     MPI_Init(NULL, NULL);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    int* sendCountsNodes;
-    int* sendCountsDegree;
+    int* sendCountsNodes = (int*)malloc(sizeof(int) * size);
+    int* sendCountsDegree = (int*)malloc(sizeof(int) * size);
     struct SubGraph g;
 
     if (rank == 0) {
+        struct Graph graph;
         gettimeofday(&startTime, 0);
         initStruct(&graph, argv[1]);
         // printGraph(graph);
 
-        sendCountsNodes = (int*)malloc(sizeof(int) * size);
-        sendCountsDegree = (int*)malloc(sizeof(int) * size);
         split(graph, size, sendCountsNodes, sendCountsDegree);
 
         // send info about each process subgraph
-        MPI_Scatter(sendCountsNodes, 1, MPI_INT, &g.numberOfNodes, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        MPI_Bcast(sendCountsNodes, size, MPI_INT, 0, MPI_COMM_WORLD);
+        g.numberOfNodes = sendCountsNodes[rank];
         MPI_Scatter(sendCountsDegree, 1, MPI_INT, &g.numberOfEdges, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
         // allocate resources to store subgraph
@@ -211,16 +205,17 @@ int main(int argc, char* argv[]) {
 
         // de-flatten neighbors
         int flatNeighborIndex = 0;
-        g.neighbor = (int**)malloc(sizeof(int*) * g.numberOfNodes);
+        g.neighbors = (int**)malloc(sizeof(int*) * g.numberOfNodes);
         for (int i = 0; i < g.numberOfNodes; i++) {
-            g.neighbor[i] = (int*)malloc(sizeof(int) * g.degree[i]);
+            g.neighbors[i] = (int*)malloc(sizeof(int) * g.degree[i]);
             for (int k = 0; k < g.degree[i]; k++) {
-                g.neighbor[i][k] = flatNeighbor[flatNeighborIndex++];
+                g.neighbors[i][k] = flatNeighbor[flatNeighborIndex++];
             }
         }
     } else {
         // send info about each process subgraph
-        MPI_Scatter(sendCountsNodes, 1, MPI_INT, &g.numberOfNodes, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        MPI_Bcast(sendCountsNodes, size, MPI_INT, 0, MPI_COMM_WORLD);
+        g.numberOfNodes = sendCountsNodes[rank];
         MPI_Scatter(sendCountsDegree, 1, MPI_INT, &g.numberOfEdges, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
         // allocate resources to store subgraph
@@ -229,44 +224,39 @@ int main(int argc, char* argv[]) {
 
         // receives data to insert in subgraph
         MPI_Scatter(NULL, 1, MPI_INT, &g.offset, 1, MPI_INT, 0, MPI_COMM_WORLD);
-        MPI_Scatterv(graph.neighbors, sendCountsDegree, NULL, MPI_INT, flatNeighbor, g.numberOfEdges, MPI_INT, 0, MPI_COMM_WORLD);
-        MPI_Scatterv(graph.degree, sendCountsNodes, NULL, MPI_INT, g.degree, g.numberOfNodes, MPI_INT, 0, MPI_COMM_WORLD);
+        MPI_Scatterv(NULL, sendCountsDegree, NULL, MPI_INT, flatNeighbor, g.numberOfEdges, MPI_INT, 0, MPI_COMM_WORLD);
+        MPI_Scatterv(NULL, sendCountsNodes, NULL, MPI_INT, g.degree, g.numberOfNodes, MPI_INT, 0, MPI_COMM_WORLD);
         // de-flatten neighbors
         int flatNeighborIndex = 0;
-        g.neighbor = (int**)malloc(sizeof(int*) * g.numberOfNodes);
+        g.neighbors = (int**)malloc(sizeof(int*) * g.numberOfNodes);
         for (int i = 0; i < g.numberOfNodes; i++) {
-            g.neighbor[i] = (int*)malloc(sizeof(int) * g.degree[i]);
+            g.neighbors[i] = (int*)malloc(sizeof(int) * g.degree[i]);
             for (int k = 0; k < g.degree[i]; k++) {
-                g.neighbor[i][k] = flatNeighbor[flatNeighborIndex++];
+                g.neighbors[i][k] = flatNeighbor[flatNeighborIndex++];
             }
         }
     }
-    //     int* recvCounts = malloc(sizeof(int) * size);
-    //     for (int i = 0; i < size; i++) {
-    //         int start = i == 0 ? 0 : sendCounts[i - 1];
-    //         int end = sendCounts[i];
-    //         recvCounts[i] = end - start;
-    //     }
 
-    // int* displs = malloc(sizeof(int) * size);
-    // displs[0] = 0;
-    // for (int i = 1; i < size; i++) {
-    //     displs[i] = displs[i - 1] + recvCounts[i - 1];
-    // }
+    int* displs = malloc(sizeof(int) * size);
+    displs[0] = 0;
+    for (int i = 1; i < size; i++) {
+        displs[i] = displs[i - 1] + sendCountsNodes[i - 1];
+    }
+    int totalNumberOfNodes = displs[size - 1] + sendCountsNodes[size - 1];
 
-    // int* parent = initParent(graph);
+    int* parent = initParent(totalNumberOfNodes);
 
-    // connectedComponents(graph, parent, rank, displs, recvCounts);
+    connectedComponents(g, parent, rank, displs, sendCountsNodes, totalNumberOfNodes);
 
-    // if (rank == 0) {
-    //     printSolution(parent, graph.numberOfNodes);
-    //     gettimeofday(&endTime, 0);
+    if (rank == 0) {
+        printSolution(parent, totalNumberOfNodes);
+        gettimeofday(&endTime, 0);
 
-    //     long executionSeconds = endTime.tv_sec - startTime.tv_sec;
-    //     long executionMicroseconds = endTime.tv_usec - startTime.tv_usec;
-    //     double elapsedTime = executionSeconds + executionMicroseconds * 1e-6;
-    //     printf("Execution time: %.6fs\n", elapsedTime);
-    // }
+        long executionSeconds = endTime.tv_sec - startTime.tv_sec;
+        long executionMicroseconds = endTime.tv_usec - startTime.tv_usec;
+        double elapsedTime = executionSeconds + executionMicroseconds * 1e-6;
+        printf("Execution time: %.6fs\n", elapsedTime);
+    }
     MPI_Finalize();
     return 0;
 }
