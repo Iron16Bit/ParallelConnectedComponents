@@ -181,7 +181,8 @@ int main(int argc, char** argv) {
         if (uniq == 0 || cmp_edge(&global[i], &global[uniq - 1]) != 0) global[uniq++] = global[i];
     }
 
-    FILE* f = fopen(output, "w");
+    // FILE* f = fopen(output, "w");
+    FILE* f = stdout;
     if (!f) {
         fprintf(stderr, "cannot open output\n");
         free(global);

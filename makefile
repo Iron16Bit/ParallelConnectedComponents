@@ -11,11 +11,11 @@ TARGET_PSV = $(OUTDIR)/parallelSV.out
 TARGET_GEN = utils/generator.out
 TARGET_DEBUG = $(OUTDIR)/debug.out
 
-SRC_SEQ_REM = src/sequentialRem.c
-SRC_SEQ_SV = src/sequentialSV.c
-SRC_PSV = src/parallelSV.c
+SRC_SEQ_REM = src/sequential/sequentialRem.c
+SRC_SEQ_SV = src/sequential/sequentialSV.c
+SRC_PSV = src/parallel/parallelSV.c
 SRC_GEN = utils/generator.c
-SRC_DEBUG = src/parallelSV.c
+SRC_DEBUG = src/parallel/parallelSV.c
 
 .PHONY: all clean dirs
 
