@@ -78,18 +78,27 @@ void connectedComponents(struct SubGraph graph, int* f, int rank, int* displacem
     int* gp = malloc(sizeof(int) * totalNodes);
     int* dup = malloc(sizeof(int) * totalNodes);
     int* mngp = malloc(sizeof(int) * totalNodes);
+    int* communicationBuffer = malloc(sizeof(int) * totalNodes);
 
     // Initialization
     for (int i = 0; i < totalNodes; i++) {
         gp[i] = f[i];
         dup[i] = gp[i];
         mngp[i] = gp[i];
+        communicationBuffer[i] = f[i];
     }
 
     MPI_Request request;
     bool stop = false;
     bool local_stop = false;
+
+    // Parameters for MPI_Iallgatherv
+    int *sendcounts = recvCounts;
+    int *displs = displacement;
+
     while (!stop) {
+        MPI_Iallgatherv(f + graph.offset, n, MPI_INT, communicationBuffer, sendcounts, displs, MPI_INT, MPI_COMM_WORLD, &request);
+
         // 1a. mngp = A ⊗ gp  (neighbor-wise minimum grandparent)
         findMinGrandparentOfNeighbours(graph, gp, mngp);  // GrB mxv
 
@@ -102,34 +111,31 @@ void connectedComponents(struct SubGraph graph, int* f, int rank, int* displacem
         // 3. Shortcutting: f[u] = min(f[u], gp[u])
         vectorMin(f, gp, n, graph.offset);  // GrB eWiseMult
 
-        MPI_Iallreduce(MPI_IN_PLACE, f, totalNodes, MPI_INT, MPI_MIN, MPI_COMM_WORLD, &request);
+        // Merge results from all processes
+        MPI_Wait(&request, MPI_STATUS_IGNORE);
+        vectorMin(f, communicationBuffer, totalNodes, 0);
 
         // 4. Compute grandparent: gp[u] = f[f[u]]
         computeGrandparent(f, gp, n, graph.offset);
 
         // 5a. Check convergence
         local_stop = converged(gp, dup, n, graph.offset);
-
         int local_stop_int = local_stop ? 1 : 0;
         int stop_int = 0;
-
         MPI_Allreduce(&local_stop_int, &stop_int, 1, MPI_INT, MPI_LAND, MPI_COMM_WORLD);
         stop = (stop_int != 0);
 
-        MPI_Wait(&request, MPI_STATUS_IGNORE);
         for (int i = 0; i < totalNodes; i++) {
             gp[i] = f[f[i]];
             dup[i] = gp[i];
             mngp[i] = gp[i];
-            if (i > graph.offset && i < graph.offset + graph.numberOfNodes) {
-                f[i] = root(f[i], f);
-            }
         }
     }
 
     free(gp);
     free(dup);
     free(mngp);
+    free(communicationBuffer);
 }
 
 void split(struct Graph graph, int size, int* sendCountsNode, int* sendCountsDegree) {

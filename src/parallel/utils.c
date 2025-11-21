@@ -25,8 +25,8 @@ void printSolution(int* parent, int lenght) {
     int numberOfUniqueParents = 0;
 
     for (int i = 0; i < lenght; i++) {
-        // int vertexRoot = root(i, parent);
-        int vertexRoot = parent[i];
+        int vertexRoot = root(i, parent);
+        // int vertexRoot = parent[i];
         if (!contains(uniqueParents, numberOfUniqueParents, vertexRoot)) {
             uniqueParents[numberOfUniqueParents] = vertexRoot;
             numberOfUniqueParents += 1;
