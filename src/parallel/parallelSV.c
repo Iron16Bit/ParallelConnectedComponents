@@ -61,11 +61,11 @@ void minGrandparent(int* f, const int* mngp, int n, int offset) {
     }
 }
 
-bool converged(const int* gp, const int* dup, int n, int offset) {
+int converged(const int* gp, const int* dup, int n, int offset) {
     for (int i = offset; i < offset + n; i++)
         if (gp[i] != dup[i])
-            return false;
-    return true;
+            return true;
+    return false;
 }
 
 void update(int* dest, int* src, int n) {
@@ -75,86 +75,51 @@ void update(int* dest, int* src, int n) {
 
 void connectedComponents(struct SubGraph graph, int* f, int rank, int* displacement, int* recvCounts, int totalNodes) {
     int n = graph.numberOfNodes;
-    int offset = graph.offset;
-
     int* gp = malloc(sizeof(int) * totalNodes);
     int* dup = malloc(sizeof(int) * totalNodes);
     int* mngp = malloc(sizeof(int) * totalNodes);
-    
-    int* communicationBuffer[2];
-    communicationBuffer[0] = malloc(sizeof(int) * totalNodes); // Buffer used for gathering result of previous iteration
-    communicationBuffer[1] = malloc(sizeof(int) * totalNodes); // Buffer used for gathering result of current iteration
 
     // Initialization
     for (int i = 0; i < totalNodes; i++) {
         gp[i] = f[i];
         dup[i] = gp[i];
         mngp[i] = gp[i];
-        communicationBuffer[0][i] = f[i];
-        communicationBuffer[1][i] = f[i];
     }
 
-    int cur = 0, next = 1;
     MPI_Request request;
-
-    bool stop = false;
-    bool local_stop = false;
-    bool firstIteration = true;
-
-    while (!stop) {
-        if (!firstIteration) {
-            // Merge last results from all processes
-            vectorMin(f, communicationBuffer[cur], totalNodes, 0);
-        }
-
+    int sum = 1;
+    while (sum != 0) {
         // 1a. mngp = A ⊗ gp  (neighbor-wise minimum grandparent)
         findMinGrandparentOfNeighbours(graph, gp, mngp);  // GrB mxv
 
         // 1b. Stochastic hooking: f[f[u]] = min(f[f[u]], mngp[u])
-        minGrandparent(f, mngp, n, offset);  // GrB assign
+        minGrandparent(f, mngp, n, graph.offset);  // GrB assign
 
         // 2. Aggressive hooking: f[u] = min(f[u], mngp[u])
-        vectorMin(f, mngp, n, offset);  // GrB eWiseMult
+        vectorMin(f, mngp, n, graph.offset);  // GrB eWiseMult
 
         // 3. Shortcutting: f[u] = min(f[u], gp[u])
-        vectorMin(f, gp, n, offset);  // GrB eWiseMult
+        vectorMin(f, gp, n, graph.offset);  // GrB eWiseMult
 
-        MPI_Iallgatherv(f + graph.offset, n, MPI_INT, communicationBuffer[next], recvCounts, displacement, MPI_INT, MPI_COMM_WORLD, &request);
+        MPI_Iallreduce(MPI_IN_PLACE, f, totalNodes, MPI_INT, MPI_MIN, MPI_COMM_WORLD, &request);
 
         // 4. Compute grandparent: gp[u] = f[f[u]]
-        computeGrandparent(f, gp, n, offset);
+        computeGrandparent(f, gp, n, graph.offset);
 
         // 5a. Check convergence
-        local_stop = converged(gp, dup, n, offset);
-        int local_stop_int = local_stop ? 1 : 0;
-        int stop_int = 0;
-        MPI_Allreduce(&local_stop_int, &stop_int, 1, MPI_INT, MPI_LAND, MPI_COMM_WORLD);
-        stop = (stop_int != 0);
+        int diff = converged(gp, dup, n, graph.offset);
+        MPI_Allreduce(&diff, &sum, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 
+        MPI_Wait(&request, MPI_STATUS_IGNORE);
         for (int i = 0; i < totalNodes; i++) {
             gp[i] = f[f[i]];
             dup[i] = gp[i];
-            mngp[i] = gp[i];
         }
-
-        // Wait for gather to finish only if continuing
-        if (!stop) {
-            MPI_Wait(&request, MPI_STATUS_IGNORE);
-            int tmp = cur; cur = next; next = tmp;
-        } else {
-            if (request != MPI_REQUEST_NULL)
-                MPI_Wait(&request, MPI_STATUS_IGNORE);
-        }
-
-        if (firstIteration)
-            firstIteration = false;
     }
 
     free(gp);
     free(dup);
     free(mngp);
-    free(communicationBuffer[0]);
-    free(communicationBuffer[1]);
 }
 
 void split(struct Graph graph, int size, int* sendCountsNode, int* sendCountsDegree) {
