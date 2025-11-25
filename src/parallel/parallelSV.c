@@ -8,8 +8,9 @@
 #include <stdlib.h>
 #include <sys/time.h>
 
-#include "utils.c"
+#include "customCommunication.c"
 #include "readData.c"
+#include "utils.c"
 
 struct SubGraph {
     int numberOfNodes;
@@ -73,22 +74,44 @@ void update(int* dest, int* src, int n) {
         dest[i] = src[i];
 }
 
-void connectedComponents(struct SubGraph graph, int* f, int rank, int* displacement, int* recvCounts, int totalNodes) {
+void Build_mpi_type(int* modifiedIndex, int* modifiedValues, MPI_Datatype* datatype) {
+    int array_of_blocklenghts[2] = {1, 1};
+    MPI_Datatype array_of_types[2] = {MPI_INT, MPI_INT};
+
+    MPI_Aint index_addr, value_addr;
+    MPI_Aint array_of_displs[2] = {0};
+    MPI_Get_address(modifiedIndex, &index_addr);
+    MPI_Get_address(modifiedValues, &value_addr);
+    array_of_displs[1] = value_addr - index_addr;
+    MPI_Type_create_struct(2, array_of_blocklenghts, array_of_displs, array_of_types, datatype);
+    MPI_Type_commit(datatype);
+}
+
+void connectedComponents(struct SubGraph graph, int* f, int rank, int* displacement, int* recvCounts, int totalNodes, int size) {
     int n = graph.numberOfNodes;
     int* gp = malloc(sizeof(int) * totalNodes);
     int* dup = malloc(sizeof(int) * totalNodes);
     int* mngp = malloc(sizeof(int) * totalNodes);
 
+    int* modifiedIndex = malloc(sizeof(int) * totalNodes);
+    int* modifiedValue = malloc(sizeof(int) * totalNodes);
+    int accessModifiedIndex = 0;
+
+    int* prevF = malloc(sizeof(int) * totalNodes);
+
+    MPI_Datatype MPI_ModifiedValue;
+    Build_mpi_type(modifiedIndex, modifiedValue, &MPI_ModifiedValue);
     // Initialization
     for (int i = 0; i < totalNodes; i++) {
         gp[i] = f[i];
         dup[i] = gp[i];
         mngp[i] = gp[i];
+        prevF[i] = f[i];
     }
 
-    MPI_Request request;
     int sum = 1;
     while (sum != 0) {
+        accessModifiedIndex = 0;
         // 1a. mngp = A ⊗ gp  (neighbor-wise minimum grandparent)
         findMinGrandparentOfNeighbours(graph, gp, mngp);  // GrB mxv
 
@@ -101,19 +124,41 @@ void connectedComponents(struct SubGraph graph, int* f, int rank, int* displacem
         // 3. Shortcutting: f[u] = min(f[u], gp[u])
         vectorMin(f, gp, n, graph.offset);  // GrB eWiseMult
 
-        MPI_Iallreduce(MPI_IN_PLACE, f, totalNodes, MPI_INT, MPI_MIN, MPI_COMM_WORLD, &request);
+        for (int i = 0; i < totalNodes; i++) {
+            if (prevF[i] != f[i]) {
+                modifiedIndex[accessModifiedIndex] = i;
+                modifiedValue[accessModifiedIndex] = f[i];
+                accessModifiedIndex++;
+            }
+        }
 
+        // Mark last modified element
+        if (accessModifiedIndex < totalNodes)
+            modifiedIndex[accessModifiedIndex++] = -1;
+
+        if (size > 1) {
+            customReduce(modifiedIndex, modifiedValue, accessModifiedIndex, MPI_ModifiedValue, size, rank, totalNodes);
+            if (rank == 0) {
+                for (int i = 0; i < totalNodes; i++) {
+                    if (modifiedIndex[i] == -1) {
+                        break;
+                    }
+                    f[modifiedIndex[i]] = f[modifiedIndex[i]] < modifiedValue[i] ? f[modifiedIndex[i]] : modifiedValue[i];
+                }
+            }
+            MPI_Bcast(f, totalNodes, MPI_INT, 0, MPI_COMM_WORLD);
+        }
         // 4. Compute grandparent: gp[u] = f[f[u]]
         computeGrandparent(f, gp, n, graph.offset);
-
+        
         // 5a. Check convergence
         int diff = converged(gp, dup, n, graph.offset);
         MPI_Allreduce(&diff, &sum, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 
-        MPI_Wait(&request, MPI_STATUS_IGNORE);
         for (int i = 0; i < totalNodes; i++) {
             gp[i] = f[f[i]];
             dup[i] = gp[i];
+            prevF[i] = f[i];
         }
     }
 
@@ -156,11 +201,13 @@ void split(struct Graph graph, int size, int* sendCountsNode, int* sendCountsDeg
 }
 
 int main(int argc, char* argv[]) {
-    if (argc != 3) {
+    int totalRuns = 1;
+
+    if (argc != 3 && argc != 2) {
         fprintf(stderr, "Error Usage: %s <path_to_file> <number of runs>\n", argv[0]);
+        totalRuns = atoi(argv[2]);
         exit(1);
     }
-    int totalRuns = atoi(argv[2]);
     struct timeval startTime, endTime;
     double totalExecTime = 0;
 
@@ -244,7 +291,7 @@ int main(int argc, char* argv[]) {
 
         int* parent = initParent(totalNumberOfNodes);
 
-        connectedComponents(g, parent, rank, displs, sendCountsNodes, totalNumberOfNodes);
+        connectedComponents(g, parent, rank, displs, sendCountsNodes, totalNumberOfNodes, size);
 
         if (rank == 0) {
             printSolution(parent, totalNumberOfNodes);

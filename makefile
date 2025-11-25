@@ -32,7 +32,7 @@ $(TARGET_SEQ_SV): $(SRC_SEQ_SV)
 	$(CC) $(CFLAGS) -o $@ $<
 
 $(TARGET_PSV): $(SRC_PSV)
-	$(MPICC) $(CFLAGS) -o $@ $<
+	$(MPICC) $(CFLAGS) -o $@ $< -lm
 
 $(TARGET_GEN): $(SRC_GEN)
 	$(CC) $(GENFLAGS) -o $@ $<
