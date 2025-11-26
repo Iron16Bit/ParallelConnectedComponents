@@ -2,17 +2,59 @@
 #include <mpi.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-int IsPowerOfTwo(int x) {
-    return (x & (x - 1)) == 0;
+struct ModifiedValues
+{
+    int *modifiedIndex;
+    int *modifiedValues;
+    int length;
+};
+
+struct ReduceBuffers
+{
+    int *sendbuf;
+    int *recvbuf;
+    int *tempIndex;
+    int *tempValues;
+    int *mergedIndex;
+    int *mergedValues;
+    int capacity;
+};
+
+struct ReduceBuffers *allocReduceBuffers(int totalNodes)
+{
+    struct ReduceBuffers *buffers = malloc(sizeof(struct ReduceBuffers));
+    buffers->capacity = totalNodes;
+    buffers->sendbuf = malloc(sizeof(int) * (1 + 2 * totalNodes));
+    buffers->recvbuf = malloc(sizeof(int) * (1 + 2 * totalNodes));
+    buffers->tempIndex = malloc(sizeof(int) * totalNodes);
+    buffers->tempValues = malloc(sizeof(int) * totalNodes);
+    buffers->mergedIndex = malloc(sizeof(int) * totalNodes);
+    buffers->mergedValues = malloc(sizeof(int) * totalNodes);
+    return buffers;
 }
 
-int countBit(int N) {
+void freeReduceBuffers(struct ReduceBuffers *buffers)
+{
+    free(buffers->sendbuf);
+    free(buffers->recvbuf);
+    free(buffers->tempIndex);
+    free(buffers->tempValues);
+    free(buffers->mergedIndex);
+    free(buffers->mergedValues);
+    free(buffers);
+}
+
+int countBit(int N)
+{
     int count0 = 0;
-    while (N > 0) {
+    while (N > 0)
+    {
         if (!(N & 1))
             count0++;
-        else {
+        else
+        {
             return count0;
         }
         N = N >> 1;
@@ -20,98 +62,200 @@ int countBit(int N) {
     return count0;
 }
 
-void customReduce(int* modifiedIndex, int* modifiedValue, int length, MPI_Datatype datatype, int size, int rank, int totalNodes) {
-    int* bufferIndex = (int*)calloc(totalNodes, sizeof(int));
-    int* bufferValue = (int*)calloc(totalNodes, sizeof(int));
+// void customReduce(struct ModifiedValues *values, int size, int rank, int totalNodes, struct ReduceBuffers *buffers)
+// {
+//     memcpy(buffers->mergedIndex, values->modifiedIndex, values->length * sizeof(int));
+//     memcpy(buffers->mergedValues, values->modifiedValues, values->length * sizeof(int));
+//     int mergedLength = values->length;
 
-    if (rank == 0) {
-        int maxArch = floor(logf(size)) + 1;
-        for (int i = 0; i < totalNodes; i++) {
-            if (modifiedIndex[i] == -1) {
-                bufferIndex[i] = -1;
-                bufferValue[i] = -1;
-                break;
-            }
-            bufferIndex[i] = modifiedIndex[i];
-            bufferValue[i] = modifiedValue[i];
-        }
-        for (int i = 0; i < maxArch; i++) {
-            MPI_Recv(modifiedIndex, totalNodes, datatype, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            for (int i = 0; i < totalNodes; i++) {
-                if (modifiedIndex[i] == -1) {
-                    break;
+//     int step = 1;
+//     while (step < size)
+//     {
+//         int dest = rank ^ step;
+
+//         if (dest < size)
+//         {
+//             // Pack: length + indices + values
+//             buffers->sendbuf[0] = mergedLength;
+//             memcpy(buffers->sendbuf + 1, buffers->mergedIndex, mergedLength * sizeof(int));
+//             memcpy(buffers->sendbuf + 1 + mergedLength, buffers->mergedValues, mergedLength * sizeof(int));
+
+//             int send_size = 1 + 2 * mergedLength;
+//             int recv_size;
+
+//             // Exchange buffer sizes
+//             MPI_Sendrecv(&send_size, 1, MPI_INT, dest, 0,
+//                          &recv_size, 1, MPI_INT, dest, 0,
+//                          MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+//             // Dynamically resize recvbuf if needed
+//             if (recv_size > 1 + 2 * totalNodes)
+//             {
+//                 free(buffers->recvbuf);
+//                 buffers->recvbuf = malloc(sizeof(int) * recv_size);
+//             }
+
+//             // Exchange actual data
+//             MPI_Sendrecv(buffers->sendbuf, send_size, MPI_INT, dest, 1,
+//                          buffers->recvbuf, recv_size, MPI_INT, dest, 1,
+//                          MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+//             // Unpack received data
+//             int recv_length = buffers->recvbuf[0];
+//             int *recv_indices = buffers->recvbuf + 1;
+//             int *recv_values = buffers->recvbuf + 1 + recv_length;
+
+//             // Merge: sorted merge of two arrays
+//             int i = 0, j = 0, k = 0;
+
+//             while (i < mergedLength && j < recv_length)
+//             {
+//                 if (buffers->mergedIndex[i] < recv_indices[j])
+//                 {
+//                     buffers->tempIndex[k] = buffers->mergedIndex[i];
+//                     buffers->tempValues[k] = buffers->mergedValues[i];
+//                     i++;
+//                     k++;
+//                 }
+//                 else if (buffers->mergedIndex[i] > recv_indices[j])
+//                 {
+//                     buffers->tempIndex[k] = recv_indices[j];
+//                     buffers->tempValues[k] = recv_values[j];
+//                     j++;
+//                     k++;
+//                 }
+//                 else
+//                 {
+//                     // Same index: take minimum value
+//                     buffers->tempIndex[k] = buffers->mergedIndex[i];
+//                     buffers->tempValues[k] = (buffers->mergedValues[i] < recv_values[j])
+//                                                  ? buffers->mergedValues[i]
+//                                                  : recv_values[j];
+//                     i++;
+//                     j++;
+//                     k++;
+//                 }
+//             }
+
+//             // Copy remaining elements
+//             while (i < mergedLength)
+//             {
+//                 buffers->tempIndex[k] = buffers->mergedIndex[i];
+//                 buffers->tempValues[k] = buffers->mergedValues[i];
+//                 i++;
+//                 k++;
+//             }
+//             while (j < recv_length)
+//             {
+//                 buffers->tempIndex[k] = recv_indices[j];
+//                 buffers->tempValues[k] = recv_values[j];
+//                 j++;
+//                 k++;
+//             }
+
+//             memcpy(buffers->mergedIndex, buffers->tempIndex, k * sizeof(int));
+//             memcpy(buffers->mergedValues, buffers->tempValues, k * sizeof(int));
+//             mergedLength = k;
+//         }
+
+//         step *= 2;
+//     }
+
+//     // Copy final result back to values
+//     values->length = mergedLength;
+//     memcpy(values->modifiedIndex, buffers->mergedIndex, mergedLength * sizeof(int));
+//     memcpy(values->modifiedValues, buffers->mergedValues, mergedLength * sizeof(int));
+// }
+
+void customReduce(struct ModifiedValues *values, int size, int rank, int totalNodes, struct ReduceBuffers *buffers)
+{
+    memcpy(buffers->mergedIndex, values->modifiedIndex, values->length * sizeof(int));
+    memcpy(buffers->mergedValues, values->modifiedValues, values->length * sizeof(int));
+    int mergedLength = values->length;
+
+    int step = 1;
+    while (step < size)
+    {
+        int dest = rank ^ step;
+
+        if (dest < size)
+        {
+            // Pack into a single buffer to avoid multiple MPI calls
+            buffers->sendbuf[0] = mergedLength;
+            memcpy(buffers->sendbuf + 1, buffers->mergedIndex, mergedLength * sizeof(int));
+            memcpy(buffers->sendbuf + 1 + mergedLength, buffers->mergedValues, mergedLength * sizeof(int));
+
+            int send_size = 1 + 2 * mergedLength;
+
+            // Idea of Sendrecv: parallel MPI_Isend and MPI_Irecv (from src to dest), making send and recv proceed in parallel
+            MPI_Status recv_status;
+            MPI_Sendrecv(buffers->sendbuf, send_size, MPI_INT, dest, 1,
+                         buffers->recvbuf, 1 + 2 * totalNodes, MPI_INT, dest, 1,
+                         MPI_COMM_WORLD, &recv_status);
+
+            int recv_size;
+            MPI_Get_count(&recv_status, MPI_INT, &recv_size);
+
+            // Unpack received data
+            int recv_length = buffers->recvbuf[0];
+            int *recv_indices = buffers->recvbuf + 1;
+            int *recv_values = buffers->recvbuf + 1 + recv_length;
+
+            // Merge received data with local data
+            int i = 0, j = 0, k = 0;
+
+            while (i < mergedLength && j < recv_length)
+            {
+                if (buffers->mergedIndex[i] < recv_indices[j])
+                {
+                    buffers->tempIndex[k] = buffers->mergedIndex[i];
+                    buffers->tempValues[k] = buffers->mergedValues[i];
+                    i++;
+                    k++;
                 }
-                for (int j = 0; j < totalNodes; j++) {
-                    if (bufferIndex[j] > modifiedIndex[i]) {
-                        // Move to the right
-                        for (int k = totalNodes - 1; k >= j; k--) {
-                            modifiedIndex[k] = modifiedIndex[k - 1];
-                            modifiedValue[k] = modifiedValue[k - 1];
-                        }
-                        // Insert new value
-                        bufferIndex[j] = modifiedIndex[i];
-                        bufferValue[j] = modifiedValue[i];
-                        break;
-                    } else if (bufferIndex[j] == modifiedIndex[i]) {
-                        bufferValue[j] = bufferValue[j] < modifiedValue[i] ? bufferValue[j] : modifiedValue[i];
-                    }
+                else if (buffers->mergedIndex[i] > recv_indices[j])
+                {
+                    buffers->tempIndex[k] = recv_indices[j];
+                    buffers->tempValues[k] = recv_values[j];
+                    j++;
+                    k++;
+                }
+                else
+                {
+                    buffers->tempIndex[k] = buffers->mergedIndex[i];
+                    buffers->tempValues[k] = (buffers->mergedValues[i] < recv_values[j])
+                                                 ? buffers->mergedValues[i]
+                                                 : recv_values[j];
+                    i++;
+                    j++;
+                    k++;
                 }
             }
-        }
-        for (int i = 0; i < totalNodes; i++) {
-            if (bufferIndex[i] == -1) {
-                modifiedIndex[i] = -1;
-                modifiedValue[i] = -1;
-                break;
+
+            while (i < mergedLength)
+            {
+                buffers->tempIndex[k] = buffers->mergedIndex[i];
+                buffers->tempValues[k] = buffers->mergedValues[i];
+                i++;
+                k++;
             }
-            printf("%d, ", bufferIndex[i]);
-            modifiedIndex[i] = bufferIndex[i];
-            modifiedValue[i] = bufferValue[i];
-        }
-        printf("\n");
-    } else {
-        int myArch = countBit(rank);
-        for (int i = 0; i < myArch; i++) {
-            MPI_Recv(modifiedIndex, totalNodes, datatype, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            for (int i = 0; i < totalNodes; i++) {
-                if (modifiedIndex[i] == -1) {
-                    break;
-                }
-                for (int j = 0; j < totalNodes; j++) {
-                    if (bufferIndex[j] > modifiedIndex[i]) {
-                        // Move to the right
-                        for (int k = totalNodes - 1; k >= j; k--) {
-                            modifiedIndex[k] = modifiedIndex[k - 1];
-                            modifiedValue[k] = modifiedValue[k - 1];
-                        }
-                        // Insert new value
-                        bufferIndex[j] = modifiedIndex[i];
-                        bufferValue[j] = modifiedValue[i];
-                        length += 1;
-                        break;
-                    } else if (bufferIndex[j] == modifiedIndex[i]) {
-                        bufferValue[j] = bufferValue[j] < modifiedValue[i] ? bufferValue[j] : modifiedValue[i];
-                    }
-                }
+            while (j < recv_length)
+            {
+                buffers->tempIndex[k] = recv_indices[j];
+                buffers->tempValues[k] = recv_values[j];
+                j++;
+                k++;
             }
+
+            memcpy(buffers->mergedIndex, buffers->tempIndex, k * sizeof(int));
+            memcpy(buffers->mergedValues, buffers->tempValues, k * sizeof(int));
+            mergedLength = k;
         }
 
-        if (myArch != 0) {
-            for (int i = 0; i < totalNodes; i++) {
-                if (bufferIndex[i] == -1) {
-                    modifiedIndex[i] = -1;
-                    modifiedValue[i] = -1;
-                    break;
-                }
-                modifiedIndex[i] = bufferIndex[i];
-                modifiedValue[i] = bufferValue[i];
-            }
-        }
-
-        int shift = countBit(rank) + 1;
-        int targetRank = (rank >> shift) << shift;  // Remove rightmost 1
-        MPI_Send(modifiedIndex, length, datatype, targetRank, 0, MPI_COMM_WORLD);
+        step *= 2;
     }
-    free(bufferIndex);
-    free(bufferValue);
+
+    values->length = mergedLength;
+    memcpy(values->modifiedIndex, buffers->mergedIndex, mergedLength * sizeof(int));
+    memcpy(values->modifiedValues, buffers->mergedValues, mergedLength * sizeof(int));
 }
