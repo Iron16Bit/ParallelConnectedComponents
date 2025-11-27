@@ -1,8 +1,8 @@
 CC = gcc
 MPICC = mpicc
-CFLAGS = -Wall 
-CFLAGS_DEBUG = -Wall -g3
-GENFLAGS = -Wall -O2 -fopenmp -Wformat-truncation=0
+CFLAGS = -Wall -std=c99
+CFLAGS_DEBUG = -Wall -g3 -std=c99
+GENFLAGS = -Wall -O2 -fopenmp -std=c99
 
 OUTDIR = out
 TARGET_SEQ_REM = $(OUTDIR)/sequentialRem.out
