@@ -70,12 +70,19 @@ void connectedComponents(struct Graph graph, int* parent) {
         }
 
         for (int i = 0; i < graph.numberOfNodes; i++) {
-            if(parent[parent[i]] != parentNext[parentNext[i]]) {
+            if (parent[parent[i]] != parentNext[parentNext[i]]) {
                 stop = false;
             }
             parent[i] = parentNext[i];
         }
     }
+}
+
+void printTime(char* msg, struct timeval startTime, struct timeval endTime) {
+    long executionSeconds = endTime.tv_sec - startTime.tv_sec;
+    long executionMicroseconds = endTime.tv_usec - startTime.tv_usec;
+    double elapsedTime = executionSeconds + executionMicroseconds * 1e-6;
+    printf("%s time: %.6fs\n", msg, elapsedTime);
 }
 
 int main(int argc, char* argv[]) {
@@ -84,18 +91,25 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
-    struct timeval startTime, endTime;
+    struct timeval startTime, afterIOTime, beforeComputation, afterComputation, endTime;
 
     gettimeofday(&startTime, 0);
 
     struct Graph graph;
     initStruct(&graph, argv[1]);
+    gettimeofday(&afterIOTime, 0);
 
     int* parent = initParent(graph);
+    gettimeofday(&beforeComputation, 0);
     connectedComponents(graph, parent);
+    gettimeofday(&afterComputation, 0);
 
     printSolution(parent, graph.numberOfNodes);
     gettimeofday(&endTime, 0);
+
+    printTime("IO", startTime, afterIOTime);
+    printTime("Computation", beforeComputation, afterComputation);
+    printTime("Solution reconstruction", afterComputation, endTime);
 
     long executionSeconds = endTime.tv_sec - startTime.tv_sec;
     long executionMicroseconds = endTime.tv_usec - startTime.tv_usec;
