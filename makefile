@@ -20,7 +20,7 @@ SRC_DEBUG = src/parallel/parallelSV.c
 .PHONY: all clean dirs
 
 parallel: dirs $(TARGET_PSV)
-all: dirs $(TARGET_SEQ_REM) $(TARGET_SEQ_SV) $(TARGET_PSV) $(TARGET_GEN) $(TARGET_DEBUG)
+all: dirs $(TARGET_SEQ_REM) $(TARGET_SEQ_SV) $(TARGET_PSV) $(TARGET_GEN)
 
 dirs:
 	mkdir -p $(OUTDIR)
@@ -32,7 +32,7 @@ $(TARGET_SEQ_SV): $(SRC_SEQ_SV)
 	$(CC) $(CFLAGS) -o $@ $<
 
 $(TARGET_PSV): $(SRC_PSV)
-	$(MPICC) $(CFLAGS) -o $@ $< -lm
+	$(MPICC) $(CFLAGS) -o $@ $< -lm -fopenmp
 
 $(TARGET_GEN): $(SRC_GEN)
 	$(CC) $(GENFLAGS) -o $@ $<
