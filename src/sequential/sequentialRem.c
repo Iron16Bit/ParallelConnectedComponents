@@ -9,8 +9,9 @@
 #include "readData.c"
 #include "utils.c"
 
-int* initParent(struct Graph graph) {
-    int length = graph.numberOfNodes;
+
+// Initialize the "parent" array, setting each node as the parent of itself
+int* initParent(int length) {
     int* parent = malloc(sizeof(int) * length);
 
     // Initialize each parent as the node itself
@@ -21,9 +22,11 @@ int* initParent(struct Graph graph) {
     return parent;
 }
 
-
-
-// Rem's algorithm
+/* Rem's algorithm
+* in  | int x: node with id x
+* in  | int y: node with id y
+* out | int* parent: parent array
+*/
 void findCommonAncestor(int x, int y, int* parent) {
     int rootX = x, rootY = y;
     int tmp;
@@ -47,7 +50,10 @@ void findCommonAncestor(int x, int y, int* parent) {
         }
     }
 }
-
+/* Find connected Components
+* in  | struct Graph graph: Whole graph 
+* out | int *parent: Parent array
+*/
 void connectedComponents(struct Graph graph, int* parent) {
     // Connect nodes using adjacency lists
     for (int u = 0; u < graph.numberOfNodes; u++) {
@@ -62,7 +68,7 @@ void connectedComponents(struct Graph graph, int* parent) {
 
 int main(int argc, char* argv[]) {
     if (argc != 2) {
-        fprintf(stderr, "Error Usage: ./a.out <path_to_file>\n");
+        fprintf(stderr, "Error Usage: %s <path_to_file>\n", argv[0]);
         exit(1);
     }
 
@@ -73,7 +79,7 @@ int main(int argc, char* argv[]) {
     struct Graph graph;
     initStruct(&graph, argv[1]);
 
-    int* parent = initParent(graph);
+    int* parent = initParent(graph.numberOfNodes);
     connectedComponents(graph, parent);
 
     printSolution(parent, graph.numberOfNodes);

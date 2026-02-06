@@ -1,15 +1,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+// Complete graph, read from file
 struct Graph {
     int** neighbors;    // Neighbors[u]: an array of neighbor ids
-    int* degree;        // Degree[u]: number of neighbors for node u
+    int* degree;        // Array of the degree of each node
     int numberOfNodes;  // Number of nodes
     int numberOfEdges;  // Number of edge entries (lines) in the file
 };
 
-int initStruct(struct Graph* graph /* out */,
-               char* pathToFile /* in */) {
+/* Initialize Graph
+* in  | char *pathToFile: path of file to read the Graph from
+* out | struct Graph g: Initialized graph
+*/
+int initStruct(struct Graph* graph, char* pathToFile) {
     FILE* fp;
     char* line = NULL;
     size_t len = 0;

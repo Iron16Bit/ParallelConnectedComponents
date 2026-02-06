@@ -19,15 +19,17 @@ int thread_count = 1;
 #define SYNC_BATCH_K 4
 #endif
 
+//Graph structure of each process
 struct SubGraph
 {
-    int numberOfNodes;
-    int numberOfEdges;
-    int *degree;
-    int **neighbors;
-    int offset;
+    int numberOfNodes;      // Number of nodes in the subgraph 
+    int numberOfEdges;      // Number of edges in the subgraph
+    int *degree;            // Degree of each node
+    int **neighbors;        // Adjacency list 
+    int offset;             // Global node index offset
 };
 
+// Initialize the "parent" array, setting each node as the parent of itself.
 int *initParent(int length)
 {
     int *parent = malloc(sizeof(int) * length);
@@ -36,6 +38,11 @@ int *initParent(int length)
     return parent;
 }
 
+/* Neighbor-wise propagation: mngp ← graph ⊗ gp
+* in  | struct SubGraph g: Working graph of process 
+* in  | const int* gp: array of grandparents
+* out | int* mngp: array of the minimum grandparents
+*/
 void findMinGrandparentOfNeighbours(struct SubGraph g, const int *gp, int *mngp)
 {
 #pragma omp for
@@ -52,6 +59,13 @@ void findMinGrandparentOfNeighbours(struct SubGraph g, const int *gp, int *mngp)
     }
 }
 
+/* Find minimum values between src1 and src2 and stores it into dst.
+* out | int *dst: destination array
+* in  | const int *src1: first source
+* in  | const int *src2: second source, to compare
+* in  | int n: number of elements to compare
+* in  | int offset: starting index
+*/
 void vectorMin(int *dst, const int *src1, const int *src2, int n, int offset)
 {
 #pragma omp for
@@ -64,6 +78,12 @@ void vectorMin(int *dst, const int *src1, const int *src2, int n, int offset)
     }
 }
 
+/* Check if there is a difference between gp and dup. If there isn't returns 0, otherwise 1
+* in  | const int* gp: first array
+* in  | const int* dup: second array
+* in  | int n: number of elements to compare
+* in  | int offset: starting index
+*/
 int converged(const int *gp, const int *dup, int n, int offset)
 {
     for (int i = offset; i < offset + n; i++)
@@ -72,6 +92,14 @@ int converged(const int *gp, const int *dup, int n, int offset)
     return 0;
 }
 
+/* Find connected Components
+* in  | struct SubGraph g: Working graph of process
+* out | int* f: Parent array
+* in  | int rank: MPI rank of the process
+* in  | int* displacement: Array of the offset of each process. Meaning, where each process starts to work on the total graph
+* in  | int* recvCounts: Array of the numbers of nodes to send to each process.
+* in  | int totalNodes: total numbers of nodes in the whole Graph
+*/
 void connectedComponents(struct SubGraph graph, int *f, int rank, int *displacement, int *recvCounts, int totalNodes)
 {
     int n = graph.numberOfNodes;
@@ -177,6 +205,12 @@ void connectedComponents(struct SubGraph graph, int *f, int rank, int *displacem
     free(communicationBuffer);
 }
 
+/* Calculates how to split the graph into smaller subgraphs, for each process to work on.
+* in  | struct Graph graph: Whole graph
+* in  | int size: MPI size, number of process to split the Graph for
+* out  | int* sendCountsNode: amount of nodes of each subgraph
+* out  | int* sendCountsDegree: total amount of the degrees of each subgprah
+*/
 void split(struct Graph graph, int size, int *sendCountsNode, int *sendCountsDegree)
 {
     int idealValuesPerProcess = (graph.numberOfEdges + size - 1) / size;
@@ -219,6 +253,11 @@ void split(struct Graph graph, int size, int *sendCountsNode, int *sendCountsDeg
     sendCountsDegree[size - 1] = graph.numberOfEdges - totalSum;
 }
 
+/* Print delta time with a relevant message
+* in  | char *msg: message to print
+* in  | struct timeval startTime: start time of the operation to time
+* in  | struct timeval endTime: end time of the operation to time
+*/
 void printTime(char *msg, struct timeval startTime, struct timeval endTime)
 {
     long executionSeconds = endTime.tv_sec - startTime.tv_sec;
@@ -229,13 +268,13 @@ void printTime(char *msg, struct timeval startTime, struct timeval endTime)
 
 int main(int argc, char *argv[])
 {
-    int totalRuns = 1;
     if (argc != 4 && argc != 3)
     {
         fprintf(stderr, "Error Usage: %s <path_to_file> <number of threads> <number of runs>\n", argv[0]);
         exit(1);
     }
 
+    int totalRuns = 1;
     if (argc == 4)
         totalRuns = atoi(argv[3]);
     thread_count = atoi(argv[2]);

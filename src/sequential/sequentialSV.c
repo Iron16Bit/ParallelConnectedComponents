@@ -9,9 +9,9 @@
 #include "readData.c"
 #include "utils.c"
 
-int *initParent(struct Graph graph)
+// Initialize the "parent" array, setting each node as the parent of itself.
+int *initParent(int length)
 {
-    int length = graph.numberOfNodes;
     int *parent = malloc(sizeof(int) * length);
 
     // Initialize each parent as the node itself
@@ -24,40 +24,44 @@ int *initParent(struct Graph graph)
 }
 
 // Rem's algorithm
-void findCommonAncestor(int x, int y, int *parent)
-{
-    int rootX = x, rootY = y;
-    int tmp;
-    while (parent[rootX] != parent[rootY])
-    {
-        if (parent[rootX] < parent[rootY])
-        {
-            if (rootX == parent[rootX])
-            {
-                parent[rootX] = parent[rootY];
-                break;
-            }
-            tmp = parent[rootX];
-            parent[rootX] = parent[rootY];
-            rootX = tmp;
-        }
-        else
-        {
-            if (rootY == parent[rootY])
-            {
-                parent[rootY] = parent[rootX];
-                break;
-            }
-            tmp = parent[rootY];
-            parent[rootY] = parent[rootX];
-            rootY = tmp;
-        }
-    }
-}
+// void findCommonAncestor(int x, int y, int *parent)
+// {
+//     int rootX = x, rootY = y;
+//     int tmp;
+//     while (parent[rootX] != parent[rootY])
+//     {
+//         if (parent[rootX] < parent[rootY])
+//         {
+//             if (rootX == parent[rootX])
+//             {
+//                 parent[rootX] = parent[rootY];
+//                 break;
+//             }
+//             tmp = parent[rootX];
+//             parent[rootX] = parent[rootY];
+//             rootX = tmp;
+//         }
+//         else
+//         {
+//             if (rootY == parent[rootY])
+//             {
+//                 parent[rootY] = parent[rootX];
+//                 break;
+//             }
+//             tmp = parent[rootY];
+//             parent[rootY] = parent[rootX];
+//             rootY = tmp;
+//         }
+//     }
+// }
 
+/* Find connected Components
+* in  | struct Graph graph: Whole graph
+* out | int *parent: Parent array
+*/
 void connectedComponents(struct Graph graph, int *parent)
 {
-    int *parentNext = initParent(graph);
+    int *parentNext = initParent(graph.numberOfNodes);
     bool stop = false;
     while (!stop)
     {
@@ -96,6 +100,11 @@ void connectedComponents(struct Graph graph, int *parent)
     }
 }
 
+/* Print delta time with a relevant message
+* in  | char *msg: message to print
+* in  | struct timeval startTime: start time of the operation to time
+* in  | struct timeval endTime: end time of the operation to time
+*/
 void printTime(char *msg, struct timeval startTime, struct timeval endTime)
 {
     long executionSeconds = endTime.tv_sec - startTime.tv_sec;
@@ -108,7 +117,7 @@ int main(int argc, char *argv[])
 {
     if (argc != 3)
     {
-        fprintf(stderr, "Error Usage: ./a.out <path_to_file> <num_executions>\n");
+        fprintf(stderr, "Error Usage: %s <path_to_file> <num_executions>\n", argv[0]);
         exit(1);
     }
 
@@ -131,23 +140,17 @@ int main(int argc, char *argv[])
         initStruct(&graph, argv[1]);
         gettimeofday(&afterIOTime, 0);
 
-        int *parent = initParent(graph);
+        int *parent = initParent(graph.numberOfNodes);
         gettimeofday(&beforeComputation, 0);
         connectedComponents(graph, parent);
         gettimeofday(&afterComputation, 0);
 
-        if (exec == 0)
-        {
-            printSolution(parent, graph.numberOfNodes);
-        }
+        printSolution(parent, graph.numberOfNodes);
         gettimeofday(&endTime, 0);
 
-        if (exec == 0)
-        {
-            printTime("IO", startTime, afterIOTime);
-            printTime("Computation", beforeComputation, afterComputation);
-            printTime("Solution reconstruction", afterComputation, endTime);
-        }
+        printTime("IO", startTime, afterIOTime);
+        printTime("Computation", beforeComputation, afterComputation);
+        printTime("Solution reconstruction", afterComputation, endTime);
 
         long executionSeconds = endTime.tv_sec - startTime.tv_sec;
         long executionMicroseconds = endTime.tv_usec - startTime.tv_usec;
